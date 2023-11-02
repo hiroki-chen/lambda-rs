@@ -7,10 +7,12 @@ use crate::{
     expr::Expr,
 };
 
-#[derive( Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Type {
     /// The type of integers.
     Int,
+    /// Booleans.
+    Bool,
     /// The type of functions.
     Arrow(Box<Type>, Box<Type>),
 }
@@ -24,6 +26,7 @@ impl Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Int => write!(f, "int"),
+            Type::Bool => write!(f, "bool"),
             Type::Arrow(arg, ret) => write!(f, "({:?} -> {:?})", arg, ret),
         }
     }
@@ -48,7 +51,7 @@ impl Env {
     /// use stlc::env::{Env, Type};
     /// use stlc::expr::Expr;
     ///
-    /// let mut env = Env { bindings: vec![] };
+    /// let mut env = Env::empty_env();
     ///
     /// let expr = Expr::Abs((("x".to_string(), Type::Int), Box::new(Expr::Term("x".to_string()))));
     /// assert_eq!(env.type_checking(&expr), Ok(Type::Arrow(Box::new(Type::Int), Box::new(Type::Int))));
@@ -88,6 +91,32 @@ impl Env {
 
                 self.bindings.pop();
                 Ok(rhs)
+            }
+            Expr::IfElse((cond, conseq, alt)) => {
+                let cond_type = match self.type_checking(cond) {
+                    Ok(cond_type) => cond_type,
+                    Err(e) => return Err(e),
+                };
+
+                if cond_type != Type::Bool {
+                    return Err(TypingError::TypeMismatch(Type::Bool, cond_type));
+                }
+
+                let conseq_type = match self.type_checking(conseq) {
+                    Ok(conseq_type) => conseq_type,
+                    Err(e) => return Err(e),
+                };
+
+                let alt_type = match self.type_checking(alt) {
+                    Ok(alt_type) => alt_type,
+                    Err(e) => return Err(e),
+                };
+
+                if conseq_type != alt_type {
+                    return Err(TypingError::TypeMismatch(conseq_type, alt_type));
+                }
+
+                Ok(conseq_type)
             }
             Expr::App((e1, e2)) => {
                 let e1_type = match self.type_checking(e1) {

@@ -16,6 +16,8 @@ pub enum Expr {
     Abs(((String, Type), Box<Expr>)),
     /// Equivalent to `let x = e1 in e2`.
     Let((String, Box<Expr>, Box<Expr>)),
+    /// Equivalent to `if e1 then e2 else e3`.
+    IfElse((Box<Expr>, Box<Expr>, Box<Expr>)),
 }
 
 impl Debug for Expr {
@@ -25,6 +27,7 @@ impl Debug for Expr {
             Expr::App((e1, e2)) => write!(f, "({:?}) {:?}", e1, e2),
             Expr::Term(n) => write!(f, "{}", n),
             Expr::Var(x) => write!(f, "{}", x),
+            Expr::IfElse((e1, e2, e3)) => write!(f, "if {:?} then {:?} else {:?}", e1, e2, e3),
             Expr::Let((x, e1, e2)) => write!(f, "let {} = {:?} in {:?}", x, e1, e2),
         }
     }
