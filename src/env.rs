@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::{
     err::{TypingError, TypingResult},
-    expr::Expr,
+    expr::{BinaryExpr, Expr, UnaryExpr},
 };
 
 #[derive(Clone, PartialEq)]
@@ -59,6 +59,7 @@ impl Env {
     pub fn type_checking(&mut self, expr: &Expr) -> TypingResult<Type> {
         match expr {
             Expr::Var(x) => {
+                // Lexical scoping.
                 for (y, ty) in self.bindings.iter().rev() {
                     if x == y {
                         return Ok(ty.clone());
@@ -78,39 +79,22 @@ impl Env {
                 }
             }
             Expr::Let((x, e1, e2)) => {
-                let lhs = match self.type_checking(e1) {
-                    Ok(lhs) => lhs,
-                    Err(e) => return Err(e),
-                };
-
+                let lhs = self.type_checking(e1)?;
                 self.add_binding(x.clone(), lhs.clone());
-                let rhs = match self.type_checking(e2) {
-                    Ok(rhs) => rhs,
-                    Err(e) => return Err(e),
-                };
+                let rhs = self.type_checking(e2)?;
 
                 self.bindings.pop();
                 Ok(rhs)
             }
             Expr::IfElse((cond, conseq, alt)) => {
-                let cond_type = match self.type_checking(cond) {
-                    Ok(cond_type) => cond_type,
-                    Err(e) => return Err(e),
-                };
+                let cond_type = self.type_checking(cond)?;
 
                 if cond_type != Type::Bool {
                     return Err(TypingError::TypeMismatch(Type::Bool, cond_type));
                 }
 
-                let conseq_type = match self.type_checking(conseq) {
-                    Ok(conseq_type) => conseq_type,
-                    Err(e) => return Err(e),
-                };
-
-                let alt_type = match self.type_checking(alt) {
-                    Ok(alt_type) => alt_type,
-                    Err(e) => return Err(e),
-                };
+                let conseq_type = self.type_checking(conseq)?;
+                let alt_type = self.type_checking(alt)?;
 
                 if conseq_type != alt_type {
                     return Err(TypingError::TypeMismatch(conseq_type, alt_type));
@@ -119,14 +103,8 @@ impl Env {
                 Ok(conseq_type)
             }
             Expr::App((e1, e2)) => {
-                let e1_type = match self.type_checking(e1) {
-                    Ok(e1) => e1,
-                    Err(e) => return Err(e),
-                };
-                let e2_type = match self.type_checking(e2) {
-                    Ok(e2) => e2,
-                    Err(e) => return Err(e),
-                };
+                let e1_type = self.type_checking(e1)?;
+                let e2_type = self.type_checking(e2)?;
 
                 match e1_type {
                     Type::Arrow(arg, ret) => {
@@ -140,6 +118,43 @@ impl Env {
                         Type::Arrow(Box::new(e2_type), Box::new(Type::Int)),
                         ty,
                     )),
+                }
+            }
+
+            Expr::Binary(expr) => {
+                let (e1, e2) = expr.extract_operands();
+                let e1_type = self.type_checking(&e1)?;
+                let e2_type = self.type_checking(&e2)?;
+
+                match expr {
+                    BinaryExpr::Arith(_) => {
+                        if e1_type == Type::Int && e2_type == Type::Int {
+                            Ok(Type::Int)
+                        } else {
+                            Err(TypingError::TypeMismatch(Type::Int, e1_type))
+                        }
+                    }
+                    BinaryExpr::Logical(_) => {
+                        if e1_type == Type::Bool && e2_type == Type::Bool {
+                            Ok(Type::Bool)
+                        } else {
+                            Err(TypingError::TypeMismatch(Type::Bool, e1_type))
+                        }
+                    }
+                }
+            }
+            Expr::Unary(expr) => {
+                let e_type = self.type_checking(&expr.extract_operand())?;
+
+                match expr {
+                    UnaryExpr::Not(_) => match e_type {
+                        Type::Int => Ok(Type::Int),
+                        _ => Err(TypingError::TypeMismatch(Type::Int, e_type)),
+                    },
+                    UnaryExpr::Neg(_) => match e_type {
+                        Type::Bool => Ok(Type::Bool),
+                        _ => Err(TypingError::TypeMismatch(Type::Bool, e_type)),
+                    },
                 }
             }
         }

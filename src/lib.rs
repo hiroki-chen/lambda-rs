@@ -7,7 +7,6 @@ pub mod expr;
 #[cfg(test)]
 mod tests {
     use crate::env::*;
-    use crate::err::TypingError;
     use crate::expr::*;
 
     #[test]
@@ -44,10 +43,7 @@ mod tests {
     fn test_type_checking_fail() {
         let mut env = Env::empty_env();
 
-        let expr = Expr::App((
-            Box::new(Expr::Term(4)),
-            Box::new(Expr::Term(2)),
-        ));
+        let expr = Expr::App((Box::new(Expr::Term(4)), Box::new(Expr::Term(2))));
 
         println!("{:?}", env.type_checking(&expr));
     }
