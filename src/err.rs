@@ -1,33 +1,25 @@
-use std::{
-    error::Error,
-    fmt::{Debug, Display},
-    result::Result,
-};
+use std::{error::Error, fmt, result::Result};
 
-use crate::env::Type;
-
-pub enum TypingError {
+pub enum EvalError {
     UnboundVariable(String),
-    TypeMismatch(Type, Type),
+    TypeMismatch,
 }
 
-impl Debug for TypingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for EvalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TypingError::UnboundVariable(x) => write!(f, "Unbound variable: {}", x),
-            TypingError::TypeMismatch(ty1, ty2) => {
-                write!(f, "Expected type {:?}, got {:?}", ty1, ty2)
-            }
+            EvalError::UnboundVariable(x) => write!(f, "Unbound variable: {}", x),
+            EvalError::TypeMismatch => write!(f, "Type mismatch"),
         }
     }
 }
 
-impl Display for TypingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for EvalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl Error for TypingError {}
+impl Error for EvalError {}
 
-pub type TypingResult<T> = Result<T, TypingError>;
+pub type EvalResult<T> = Result<T, EvalError>;

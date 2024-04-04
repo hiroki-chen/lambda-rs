@@ -2,54 +2,19 @@
 
 pub mod env;
 pub mod err;
-pub mod expr;
+pub mod eval;
+pub mod term;
 
 #[cfg(test)]
 mod tests {
-    use crate::env::*;
-    use crate::expr::*;
+    use crate::term::{LitTerm, Term};
 
     #[test]
-    fn test_type_checking_abs() {
-        let mut env = Env::empty_env();
+    fn debug_ok() {
+        let term1 = Term::Var("x".to_string());
+        let term2 = Term::Lit(LitTerm::Int(42));
 
-        let expr = Expr::Abs((
-            ("x".to_string(), Type::Int),
-            Box::new(Expr::Var("x".to_string())),
-        ));
-
-        let ty = Type::Arrow(Box::new(Type::Int), Box::new(Type::Int));
-        assert!(matches!(env.type_checking(&expr), Ok(ty)));
+        assert_eq!(format!("{:?}", term1), "Var(\"x\")");
+        assert_eq!(format!("{:?}", term2), "Lit(42)");
     }
-
-    #[test]
-    fn test_type_checking_app() {
-        let mut env = Env::empty_env();
-
-        let expr = Expr::App((
-            Box::new(Expr::Abs((
-                ("x".to_string(), Type::Int),
-                Box::new(Expr::Var("x".to_string())),
-            ))),
-            Box::new(Expr::Term(1)),
-        ));
-
-        println!("{expr:?}");
-
-        assert!(matches!(env.type_checking(&expr), Ok(Type::Int)));
-    }
-
-    #[test]
-    fn test_type_checking_fail() {
-        let mut env = Env::empty_env();
-
-        let expr = Expr::App((Box::new(Expr::Term(4)), Box::new(Expr::Term(2))));
-
-        println!("{:?}", env.type_checking(&expr));
-    }
-}
-
-pub struct Parser {
-    pub input: String,
-    pub position: usize,
 }
