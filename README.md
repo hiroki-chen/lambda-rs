@@ -14,3 +14,17 @@ $n$ can be a complicated expression that can be reduced, like $S (n)$. When type
 In the vanilla STLC, terms are just something that can be computed but since types are "simple" enough, we do not have to cope with types in terms. In DT, things get different. A way to encode computable types is to make terms contain types and type universes (levels can be "inferred").
 
 $$ e, \rho ::= \lambda x.e \mid e : \rho \mid \forall x:\rho.\rho' \mid e_1e_2 \mid n \mid x \mid \mathcal{U}_{?} $$
+
+## Usage
+
+```shell
+$ cargo run -r --bin pi-interpreter -- --interactive
+Welcome to the Pi interpreter!
+Type 'exit' to quit.
+>>> eval ((\x -> x :: Nat -> Nat) 0);
+O
+>>> type a :: U;
+𝒰
+>>> eval (\x -> x :: a -> Nat);
+Type mismatch: Type mismatch: expected ℕ, found a
+```
