@@ -6,7 +6,7 @@ use crate::{clos::Closure, env::EvalCtx};
 
 pub type Type = Value;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum VariableName {
     Global(String),
     Local(usize),
@@ -37,8 +37,6 @@ pub enum Term {
         term: Box<CheckableTerm>,
         ty: Box<CheckableTerm>,
     },
-    /// Integer literal: `1`, `2`, `3`, etc.
-    Lit(LitTerm),
     /// Variable: `x`, `y`, `z`, etc. used to look up the evaluation environment.
     Var(VariableName),
     /// Bounded
@@ -67,16 +65,26 @@ pub enum Term {
     Binary(BinaryTerm),
     /// Unary expression.
     Unary(UnaryTerm),
+
+    // For Data.Nat.
+    Nat,
+    /// Literal zero.
+    Zero,
+    Succ {
+        pred: Box<Term>,
+    },
 }
 
 /// Term↓
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum CheckableTerm {
     InfereableTerm { term: Box<Term> },
     Lambda { term: Box<CheckableTerm> },
+    Succ { term: Box<CheckableTerm> },
+    Zero,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Value {
     VNeutral(Neutral),
     VAbs(Box<Closure<Value, EvalCtx>>),
@@ -85,6 +93,11 @@ pub enum Value {
         val: Box<Value>,
         body: Box<Closure<Value, EvalCtx>>, // Box<dyn Callable<Value>>
     },
+    VZero,
+    VSucc {
+        pred: Box<Value>,
+    },
+    VNat,
 }
 
 /// A neutral term is just a variable applied to a possibly empty sequence of values or
@@ -202,18 +215,63 @@ impl fmt::Debug for BinaryLogicalExpr {
 impl fmt::Debug for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Term::AnnotatedTerm { term, ty } => write!(f, "{:?} : {:?}", term, ty),
-            Term::App { clos, arg } => write!(f, "{:?} {:?}", clos, arg),
-            Term::DependentFunctionSpace { arg, ret } => write!(f, "∀{:?}. {:?}", arg, ret),
-            Term::Lit(n) => write!(f, "Lit({:?})", n),
-            Term::Var(x) => write!(f, "Var({:?})", x),
-            Term::Bounded(n) => write!(f, "Bounded({})", n),
-            Term::Universe => write!(f, "Set"),
+            Term::AnnotatedTerm { term, ty } => write!(f, "{:?} :: {:?}", term, ty),
+            Term::App { clos, arg } => write!(f, "App ({:?})({:?})", clos, arg),
+            Term::DependentFunctionSpace { arg, ret } => write!(f, "∀ {:?} . {:?}", arg, ret),
+            Term::Var(x) => write!(f, "{:?}", x),
+            Term::Bounded(n) => write!(f, "_{}", n),
+            Term::Universe => write!(f, "𝒰"),
             Term::IfElse { cond, conseq, alt } => {
                 write!(f, "if {:?} then {:?} else {:?}", cond, conseq, alt)
             }
             Term::Binary(e) => write!(f, "{:?}", e),
             Term::Unary(e) => write!(f, "{:?}", e),
+            Term::Zero => write!(f, "O"),
+            Term::Succ { pred } => write!(f, "S({:?})", pred),
+            Term::Nat => write!(f, "ℕ"),
+        }
+    }
+}
+
+impl fmt::Debug for VariableName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VariableName::Global(x) => write!(f, "{}", x),
+            VariableName::Local(n) => write!(f, "_{}", n),
+            VariableName::Quote(n) => write!(f, "_{}", n),
+        }
+    }
+}
+
+impl fmt::Debug for CheckableTerm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CheckableTerm::InfereableTerm { term } => write!(f, "{:?}", term),
+            CheckableTerm::Lambda { term } => write!(f, "λ . {:?}", term),
+            CheckableTerm::Succ { term } => write!(f, "S({:?})", term),
+            CheckableTerm::Zero => write!(f, "O"),
+        }
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn succ_to_num(val: &Value) -> usize {
+            match val {
+                Value::VZero => 0,
+                Value::VSucc { pred } => 1 + succ_to_num(pred),
+                _ => panic!("Expected a number"),
+            }
+        }
+
+        match self {
+            Value::VNat => write!(f, "ℕ"),
+            Value::VUniverse => write!(f, "𝒰"),
+            Value::VZero => write!(f, "O"),
+            Value::VSucc { .. } => write!(f, "{}", succ_to_num(self)),
+            Value::VNeutral(n) => write!(f, "{:?}", n),
+            Value::VAbs(clos) => write!(f, "{:?}", clos),
+            Value::VPi { val, body } => write!(f, "∀ {:?} . {:?}", val, body),
         }
     }
 }

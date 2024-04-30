@@ -1,6 +1,11 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, vec};
 
-use crate::{err::EvalResult, eval::eval_checked, term::Value};
+use crate::{
+    env::EvalCtx,
+    err::EvalResult,
+    eval::{eval, type_check},
+    term::{Value, VariableName},
+};
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/lang/lambda-pi.rs"));
 
@@ -11,13 +16,28 @@ pub fn eval_file<P: AsRef<Path>>(path: P) -> EvalResult<Value> {
         .parse(&f)
         .map_err(|e| crate::err::EvalError::ParseError(e.to_string()))?;
 
-    match res {
-        Statement::Eval(e) | Statement::Check(e) => {
-            let term = ast_transform(&e)?;
+    let mut ctx = Default::default();
+    handle_statement(res, &mut ctx)
+}
 
-            eval_checked(term, Default::default())
+pub fn handle_statement(stmt: Statement, ctx: &mut EvalCtx) -> EvalResult<Value> {
+    match stmt {
+        Statement::Eval(e) | Statement::Check(e) => {
+            let term = ast_transform(&e, vec![])?;
+            println!("debug: parsed term {term:?} with context {ctx:?}");
+
+            type_check(0, term.clone(), ctx.clone())?;
+            eval(term, ctx.clone())
         }
-        _ => todo!(),
+        Statement::Declare(ident, ty) => {
+            let term = ast_transform(&ty, vec![])?;
+            println!("debug: parsed term {term:?} with context {ctx:?}");
+
+            let v = type_check(0, term, ctx.clone())?;
+            ctx.0 = ctx.0.push((VariableName::Global(ident), v));
+
+            Ok(Value::VUniverse)
+        }
     }
 }
 

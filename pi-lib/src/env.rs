@@ -8,7 +8,7 @@ use std::{
 use crate::term::{Value, VariableName};
 
 /// A context is a list of variables and their values and unamed values.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EvalCtx(
     pub Ctx<(VariableName, Value)>, // Actually, this is used for type checking: recall now types are terms.
     pub Ctx<Value>,                 // This part is looked up using bounded index.

@@ -24,7 +24,7 @@ fn lift_neutral(de_brujin_index: usize, n: Neutral) -> Term {
 }
 
 /// Lift back a value into a term.
-fn lift(de_brujin_index: usize, val: Value) -> CheckableTerm {
+pub(crate) fn lift(de_brujin_index: usize, val: Value) -> CheckableTerm {
     match val {
         Value::VAbs(clos) => {
             let body = clos
@@ -56,6 +56,13 @@ fn lift(de_brujin_index: usize, val: Value) -> CheckableTerm {
                 }),
             }
         }
+        Value::VZero => CheckableTerm::Zero,
+        Value::VSucc { pred } => CheckableTerm::Succ {
+            term: Box::new(lift(de_brujin_index, *pred)),
+        },
+        Value::VNat => CheckableTerm::InfereableTerm {
+            term: Box::new(Term::Nat),
+        },
     }
 }
 
@@ -82,7 +89,12 @@ fn subst(de_brujin_index: usize, t_what: Term, t_for: Term) -> Term {
             let ret = Box::new(subst_checked(de_brujin_index + 1, t_what, *ret));
             Term::DependentFunctionSpace { arg, ret }
         }
-        _ => todo!(),
+        Term::Nat => Term::Nat,
+        Term::Succ { pred } => {
+            let pred = Box::new(subst(de_brujin_index, t_what, *pred));
+            Term::Succ { pred }
+        }
+        _ => todo!("not implemented yet for {t_for:?}"),
     }
 }
 
@@ -94,6 +106,10 @@ fn subst_checked(de_brujin_index: usize, t_what: Term, t_for: CheckableTerm) -> 
         CheckableTerm::Lambda { term } => CheckableTerm::Lambda {
             term: Box::new(subst_checked(de_brujin_index + 1, t_what, *term)),
         },
+        CheckableTerm::Succ { term } => CheckableTerm::Succ {
+            term: Box::new(subst_checked(de_brujin_index, t_what, *term)),
+        },
+        CheckableTerm::Zero => CheckableTerm::Zero,
     }
 }
 
@@ -105,7 +121,10 @@ fn val_app(clos: &Value, arg: &Value) -> EvalResult<Value> {
             Box::new(n.clone()),
             Box::new(arg.clone()),
         ))),
-        _ => Err(EvalError::TypeMismatch),
+        _ => Err(EvalError::TypeMismatch(format!(
+            "Cannot apply a non-function value: {:?}",
+            clos
+        ))),
     }
 }
 
@@ -123,6 +142,13 @@ pub fn eval_checked(term: CheckableTerm, ctx: EvalCtx) -> EvalResult<Value> {
 
             Ok(Value::VAbs(Box::new(Closure::new(Arc::new(f), ctx))))
         }
+        CheckableTerm::Succ { term } => {
+            let pred = eval_checked(*term, ctx)?;
+            Ok(Value::VSucc {
+                pred: Box::new(pred),
+            })
+        }
+        CheckableTerm::Zero => Ok(Value::VZero),
     }
 }
 
@@ -139,7 +165,6 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
         // Type erasure: we do not need to keep the annotation.
         Term::AnnotatedTerm { term, .. } => eval_checked(*term, ctx),
         Term::DependentFunctionSpace { arg, ret } => {
-            // A
             let val = eval_checked(*arg, ctx.clone())?;
             // Let us move `ret` into the closure's evaluation context.
             let body = move |x, mut ctx: EvalCtx| {
@@ -155,8 +180,8 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
         }
         Term::Var(x) => Ok(Value::VNeutral(Neutral::NVar(x.clone()))),
         // Try to look up the context and get the result.
-        Term::Bounded(idx) => match ctx.0.into_iter().nth(idx) {
-            Some((_, val)) => Ok(val),
+        Term::Bounded(idx) => match ctx.1.into_iter().nth(idx) {
+            Some(val) => Ok(val),
             None => Err(EvalError::UnboundVariable(format!(
                 "Variable at index {} is not found in the context",
                 idx
@@ -170,7 +195,15 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
         }
         // Universe does not evaluate to anything.
         Term::Universe => Ok(Value::VUniverse),
-        _ => unimplemented!("not implemented yet"),
+        Term::Zero => Ok(Value::VZero),
+        Term::Nat => Ok(Value::VNat),
+        Term::Succ { pred } => {
+            let pred = eval(*pred, ctx)?;
+            Ok(Value::VSucc {
+                pred: Box::new(pred),
+            })
+        }
+        _ => unimplemented!("not implemented yet for {term:?}"),
     }
 }
 
@@ -187,6 +220,8 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: EvalCtx) -> EvalR
         }
         Term::Universe => Ok(Value::VUniverse),
         Term::DependentFunctionSpace { arg, ret } => {
+            println!("debug: checking {arg:?} -> {ret:?}");
+
             sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), Value::VUniverse)?;
             let arg_ty = eval_checked(*arg, Default::default())?;
             let substituted =
@@ -214,10 +249,25 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: EvalCtx) -> EvalR
                 let arg = eval_checked(*arg, Default::default())?;
                 body.call(arg)
             } else {
-                Err(EvalError::TypeMismatch)
+                Err(EvalError::TypeMismatch(format!(
+                    "Expected a dependent function, found {:?}",
+                    ty
+                )))
             }
         }
-        _ => todo!(),
+        Term::Nat => Ok(Value::VUniverse),
+        Term::Zero => Ok(Value::VNat),
+        Term::Succ { pred } => {
+            let pred_ty = type_check(de_brujin_index, *pred.clone(), ctx)?;
+            match pred_ty {
+                Value::VNat => Ok(Value::VNat),
+                _ => Err(EvalError::TypeMismatch(format!(
+                    "Expected a natural number, found {:?}",
+                    pred_ty
+                ))),
+            }
+        }
+        _ => todo!("not implemented yet for {term:?}"),
     }
 }
 
@@ -229,13 +279,18 @@ pub fn sanity_check(
     ty: Type,
 ) -> EvalResult<()> {
     match term {
+        CheckableTerm::Zero => Ok(()),
         CheckableTerm::InfereableTerm { term } => {
             let val = type_check(de_brujin_index, *term, ctx)?;
 
             let lhs = lift(0, val);
             let rhs = lift(0, ty);
+
             if lhs != rhs {
-                Err(EvalError::TypeMismatch)
+                Err(EvalError::TypeMismatch(format!(
+                    "Type mismatch: expected {:?}, found {:?}",
+                    rhs, lhs
+                )))
             } else {
                 Ok(())
             }
@@ -261,7 +316,31 @@ pub fn sanity_check(
                     )?;
                     Ok(())
                 }
-                _ => Err(EvalError::TypeMismatch),
+                _ => Err(EvalError::TypeMismatch(format!(
+                    "Expected a dependent function, found {:?}",
+                    ty
+                ))),
+            }
+        }
+        CheckableTerm::Succ { term } => {
+            let val = eval_checked(*term, Default::default())?;
+            match val {
+                Value::VZero => Ok(()),
+                Value::VSucc { pred } => {
+                    let predl = lift(de_brujin_index, *pred);
+                    let predr = lift(de_brujin_index, Value::VNat);
+                    if predl == predr {
+                        Ok(())
+                    } else {
+                        Err(EvalError::TypeMismatch(format!(
+                            "Type mismatch: expected {:?}, found {:?}",
+                            predr, predl
+                        )))
+                    }
+                }
+                _ => Err(EvalError::TypeMismatch(
+                    "Expected a natural number or a successor, found {val:?}".to_string(),
+                )),
             }
         }
     }
