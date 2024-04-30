@@ -3,6 +3,8 @@ use std::{error::Error, fmt, result::Result};
 pub enum EvalError {
     UnboundVariable(String),
     TypeMismatch,
+    FileNotFound(String),
+    ParseError(String),
 }
 
 impl fmt::Debug for EvalError {
@@ -10,6 +12,8 @@ impl fmt::Debug for EvalError {
         match self {
             EvalError::UnboundVariable(x) => write!(f, "Unbound variable: {}", x),
             EvalError::TypeMismatch => write!(f, "Type mismatch"),
+            EvalError::FileNotFound(x) => write!(f, "File not found: {}", x),
+            EvalError::ParseError(x) => write!(f, "Parse error: {}", x),
         }
     }
 }

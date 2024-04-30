@@ -2,6 +2,17 @@
 
 use std::fmt;
 
+use crate::{clos::Closure, env::EvalCtx};
+
+pub type Type = Value;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum VariableName {
+    Global(String),
+    Local(usize),
+    Quote(usize),
+}
+
 /// This represents the term in our core lambda calculus.
 ///
 /// Note that since our type system is dependently typed, there is no longer a syntactic
@@ -23,35 +34,25 @@ use std::fmt;
 pub enum Term {
     /// x: ρ
     AnnotatedTerm {
-        term: Box<Term>,
-        ty: Box<Term>,
+        term: Box<CheckableTerm>,
+        ty: Box<CheckableTerm>,
     },
     /// Integer literal: `1`, `2`, `3`, etc.
     Lit(LitTerm),
     /// Variable: `x`, `y`, `z`, etc. used to look up the evaluation environment.
-    Var(String),
+    Var(VariableName),
+    /// Bounded
+    Bounded(usize),
     /// Application: `e1 e2`.
     App {
         clos: Box<Term>,
-        arg: Box<Term>,
-    },
-    /// Lambda abstraction: `λx.e`.
-    Abs {
-        x: String,
-        body: Box<Term>,
-    },
-    /// Equivalent to `let x = e1 in e2`.
-    Let {
-        x: String,
-        e1: Box<Term>,
-        e2: Box<Term>,
+        arg: Box<CheckableTerm>,
     },
     /// For example, polymorphism functions like `∀x:*. x -> x`
     /// or `∀(A: *). A -> A` must be declared this way.
     DependentFunctionSpace {
-        x: String,       // The name of the type.
-        ty: Box<Term>,   // The type of the type.
-        body: Box<Term>, // The body of the function.
+        arg: Box<CheckableTerm>,
+        ret: Box<CheckableTerm>,
     },
     // TODO: Determine the level of type universe?
     // This will happen if we try to incorporate type into types.
@@ -68,24 +69,30 @@ pub enum Term {
     Unary(UnaryTerm),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Term↓
+#[derive(Clone, Debug, PartialEq)]
+pub enum CheckableTerm {
+    InfereableTerm { term: Box<Term> },
+    Lambda { term: Box<CheckableTerm> },
+}
+
+#[derive(Debug, Clone)]
 pub enum Value {
     VNeutral(Neutral),
-    VAbs {
-        x: String,
-        body: Box<Value>,
-    },
+    VAbs(Box<Closure<Value, EvalCtx>>),
     VUniverse,
     VPi {
-        x: String,
-        ty: Box<Value>,
-        body: Box<Value>,
+        val: Box<Value>,
+        body: Box<Closure<Value, EvalCtx>>, // Box<dyn Callable<Value>>
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// A neutral term is just a variable applied to a possibly empty sequence of values or
+/// is just a lambda abstraction. Neutral terms are good if we want to evalaute types on
+/// the fly.
+#[derive(Debug, Clone)]
 pub enum Neutral {
-    NVar(String),
+    NVar(VariableName),
     NApp(Box<Neutral>, Box<Value>),
 }
 
@@ -196,18 +203,15 @@ impl fmt::Debug for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Term::AnnotatedTerm { term, ty } => write!(f, "{:?} : {:?}", term, ty),
-            Term::Abs { x, body } => write!(f, "λ{}. {:?}", x, body),
             Term::App { clos, arg } => write!(f, "{:?} {:?}", clos, arg),
-            Term::DependentFunctionSpace { x, ty, body } => {
-                write!(f, "∀{}:{:?}. {:?}", x, ty, body)
-            }
+            Term::DependentFunctionSpace { arg, ret } => write!(f, "∀{:?}. {:?}", arg, ret),
             Term::Lit(n) => write!(f, "Lit({:?})", n),
             Term::Var(x) => write!(f, "Var({:?})", x),
+            Term::Bounded(n) => write!(f, "Bounded({})", n),
             Term::Universe => write!(f, "Set"),
             Term::IfElse { cond, conseq, alt } => {
                 write!(f, "if {:?} then {:?} else {:?}", cond, conseq, alt)
             }
-            Term::Let { x, e1, e2 } => write!(f, "let {} = {:?} in {:?}", x, e1, e2),
             Term::Binary(e) => write!(f, "{:?}", e),
             Term::Unary(e) => write!(f, "{:?}", e),
         }

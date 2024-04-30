@@ -1,20 +1,31 @@
 //! A Simply Typed Lambda Calculus interpreter with Hindley-Milner type inference.
 
+pub mod ast;
+pub mod clos;
 pub mod env;
 pub mod err;
 pub mod eval;
+pub mod parse;
 pub mod term;
 
 #[cfg(test)]
 mod tests {
-    use crate::term::{LitTerm, Term};
+    use crate::{
+        eval::eval_checked,
+        term::{CheckableTerm, Term, Value},
+    };
 
     #[test]
-    fn debug_ok() {
-        let term1 = Term::Var("x".to_string());
-        let term2 = Term::Lit(LitTerm::Int(42));
+    fn test_id() {
+        // \ x -> x
+        let identity = CheckableTerm::Lambda {
+            term: Box::new(CheckableTerm::InfereableTerm {
+                term: Box::new(Term::Bounded(0)),
+            }),
+        };
 
-        assert_eq!(format!("{:?}", term1), "Var(\"x\")");
-        assert_eq!(format!("{:?}", term2), "Lit(42)");
+        let res = eval_checked(identity, Default::default());
+
+        assert!(matches!(res, Ok(Value::VAbs(_))));
     }
 }

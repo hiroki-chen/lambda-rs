@@ -5,6 +5,27 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+use crate::term::{Value, VariableName};
+
+/// A context is a list of variables and their values and unamed values.
+#[derive(Clone)]
+pub struct EvalCtx(
+    pub Ctx<(VariableName, Value)>, // Actually, this is used for type checking: recall now types are terms.
+    pub Ctx<Value>,                 // This part is looked up using bounded index.
+);
+
+impl EvalCtx {
+    pub fn new() -> Self {
+        Self(Ctx::Nil, Ctx::Nil)
+    }
+}
+
+impl Default for EvalCtx {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// This is a FP-like list.
 #[derive(Clone)]
 pub enum Ctx<T>
