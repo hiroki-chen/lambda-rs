@@ -5,13 +5,19 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::term::{Value, VariableName};
+use crate::term::{Type, Value, VariableName};
 
-/// A context is a list of variables and their values and unamed values.
+/// A context is a list of variables and their values and unamed values..
 #[derive(Clone, Debug)]
 pub struct EvalCtx(
-    pub Ctx<(VariableName, Value)>, // Actually, this is used for type checking: recall now types are terms.
-    pub Ctx<Value>,                 // This part is looked up using bounded index.
+    pub Ctx<(VariableName, Value)>, // Names to their values.
+    pub Ctx<Type>,                  // Names to their types.
+);
+
+#[derive(Clone, Debug)]
+pub struct TypeCtx(
+    pub Ctx<(VariableName, Value)>, // Names to their definitions.
+    pub Ctx<(VariableName, Type)>,  // Names to their types.
 );
 
 impl EvalCtx {
@@ -20,9 +26,34 @@ impl EvalCtx {
     }
 }
 
+impl TypeCtx {
+    pub fn new() -> Self {
+        Self(Ctx::Nil, Ctx::Nil)
+    }
+}
+
 impl Default for EvalCtx {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Default for TypeCtx {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<TypeCtx> for EvalCtx {
+    fn from(ctx: TypeCtx) -> Self {
+        let mut tctx = Self::default();
+        tctx.0 = ctx.0;
+
+        for i in ctx.1.into_iter() {
+            tctx.1 = tctx.1.push(i.1.clone());
+        }
+
+        tctx
     }
 }
 

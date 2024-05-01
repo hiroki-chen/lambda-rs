@@ -51,3 +51,4 @@ Type mismatch: Type mismatch: expected ℕ, found ∀ ℕ . ℕ
 - Large numbers will cause *stack overflow* because we represent natural numbers as successors.
 - There is no pretty printer so sometimes the output may not be readable.
 - The parser is still buggy so some valid expressions will be rejected. Hopefully we can fix it.
+- For simplicity now we only have one `Universe`.

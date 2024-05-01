@@ -8,6 +8,8 @@ pub enum Statement {
     Eval(AstNode),
     Check(AstNode),
     Declare(String, AstNode),
+    // Alias.
+    Let(String, AstNode),
 }
 
 #[derive(Debug, Clone)]

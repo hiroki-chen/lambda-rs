@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     clos::Closure,
-    env::EvalCtx,
+    env::{EvalCtx, TypeCtx},
     err::{EvalError, EvalResult},
     term::{CheckableTerm, Neutral, Term, Type, Value, VariableName},
 };
@@ -133,7 +133,6 @@ pub fn eval_checked(term: CheckableTerm, ctx: EvalCtx) -> EvalResult<Value> {
     match term {
         // May cause some non-terminating loops.
         CheckableTerm::InfereableTerm { term } => eval(*term, ctx),
-        //
         CheckableTerm::Lambda { term } => {
             // We move the contexts into the closure.
             let f = move |x, mut ctx: EvalCtx| {
@@ -179,7 +178,17 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
                 body: Box::new(Closure::new(Arc::new(body), ctx)),
             })
         }
-        Term::Var(x) => Ok(Value::VNeutral(Neutral::NVar(x.clone()))),
+        Term::Var(x) => match x {
+            VariableName::Global(x) => match ctx
+                .0
+                .into_iter()
+                .find(|(n, _)| n == &VariableName::Global(x.clone()))
+            {
+                Some((_, val)) => Ok(val),
+                None => Ok(Value::VNeutral(Neutral::NVar(VariableName::Global(x)))),
+            },
+            _ => unreachable!("This should never happen"),
+        },
         // Try to look up the context and get the result.
         Term::Bounded(idx) => match ctx.1.into_iter().nth(idx) {
             Some(val) => Ok(val),
@@ -209,7 +218,9 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
 }
 
 /// Do a type check.
-pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: EvalCtx) -> EvalResult<Type> {
+pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalResult<Type> {
+    println!("debug: checking {term:?} with context {ctx:?}");
+
     match term {
         Term::AnnotatedTerm { term, ty } => {
             // Ensure that the type is a universe.
@@ -228,12 +239,12 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: EvalCtx) -> EvalR
             let substituted =
                 subst_checked(0, Term::Var(VariableName::Local(de_brujin_index)), *ret);
             // We push the variable into the context.
-            ctx.0 = ctx.0.push((VariableName::Local(de_brujin_index), arg_ty));
+            ctx.1 = ctx.1.push((VariableName::Local(de_brujin_index), arg_ty));
             sanity_check(de_brujin_index + 1, substituted, ctx, Value::VUniverse)?;
             // Size ↑ ?
             Ok(Value::VUniverse)
         }
-        Term::Var(name) => match ctx.0.into_iter().find(|(n, _)| n == &name) {
+        Term::Var(name) => match ctx.1.into_iter().find(|(n, _)| n == &name) {
             Some((_, val)) => Ok(val),
             None => Err(EvalError::UnboundVariable(format!(
                 "Variable {:?} is not found in the context",
@@ -241,6 +252,8 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: EvalCtx) -> EvalR
             ))),
         },
         Term::App { clos, arg } => {
+            println!("debug: checking application {clos:?} {arg:?}");
+
             let ty = type_check(de_brujin_index, *clos.clone(), ctx.clone())?;
 
             if let Value::VPi { val, body } = ty {
@@ -276,7 +289,7 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: EvalCtx) -> EvalR
 pub fn sanity_check(
     de_brujin_index: usize,
     term: CheckableTerm,
-    mut ctx: EvalCtx,
+    mut ctx: TypeCtx,
     ty: Type,
 ) -> EvalResult<()> {
     match term {
@@ -306,7 +319,7 @@ pub fn sanity_check(
                     );
 
                     // We push the variable into the context.
-                    ctx.0 = ctx.0.push((VariableName::Local(de_brujin_index), *val));
+                    ctx.1 = ctx.1.push((VariableName::Local(de_brujin_index), *val));
                     sanity_check(
                         de_brujin_index + 1,
                         substituted,

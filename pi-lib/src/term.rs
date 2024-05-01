@@ -87,11 +87,11 @@ pub enum CheckableTerm {
 #[derive(Clone)]
 pub enum Value {
     VNeutral(Neutral),
-    VAbs(Box<Closure<Value, EvalCtx>>),
+    VAbs(Box<Closure<Value, EvalCtx, Value>>),
     VUniverse,
     VPi {
         val: Box<Value>,
-        body: Box<Closure<Value, EvalCtx>>, // Box<dyn Callable<Value>>
+        body: Box<Closure<Value, EvalCtx, Value>>, // Box<dyn Callable<Value>>
     },
     VZero,
     VSucc {
@@ -265,26 +265,8 @@ impl fmt::Debug for Neutral {
 
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn succ_to_num(val: &Value) -> usize {
-            match val {
-                Value::VZero => 0,
-                Value::VSucc { pred } => 1 + succ_to_num(pred),
-                _ => panic!("Expected a number"),
-            }
-        }
-
-        match self {
-            Value::VNat => write!(f, "ℕ"),
-            Value::VUniverse => write!(f, "𝒰"),
-            Value::VZero => write!(f, "O"),
-            Value::VSucc { .. } => write!(f, "{}", succ_to_num(self)),
-            Value::VNeutral(n) => write!(f, "{:?}", n),
-            Value::VAbs(clos) => write!(f, "{:?}", clos),
-            Value::VPi { .. } => {
-                let lifted = lift(0, self.clone());
-                write!(f, "{:?}", lifted)
-            }
-        }
+        let lifted = lift(0, self.clone());
+        write!(f, "{:?}", lifted)
     }
 }
 

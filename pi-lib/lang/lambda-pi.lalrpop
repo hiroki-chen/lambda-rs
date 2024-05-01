@@ -8,6 +8,7 @@ use crate::ast::*;
 match {
     r"(def)",
     r"(eval)",
+    r"(let)",
     r"i8",
     r"i16",
     r"i32",
@@ -46,6 +47,8 @@ pub Cmd: Statement = {
         Statement::Declare(id.to_string(), *e),
     <e: Eval> <what: Term> ";" =>
         Statement::Eval(*what),
+    <l: Let> <id: Identifier> ":=" <e: Expr> ";" =>
+        Statement::Let(id.to_string(), *e),
 }
 
 pub Term: Box<AstNode> = {
@@ -91,6 +94,8 @@ pub Expr: Box<AstNode> = {
 Def: String = <s:r"(def)"> => s.into();
 // eval
 Eval: String = <s:r"(eval)"> => s.into();
+// Let
+Let: String = <s:r"(let)"> => s.into();
 // Lambda
 Lambda: String = <s:r"(lambda)|(\\)|(λ)"> => s.into();
 Num: usize = <n:r"[0-9]|[1-9]+[0-9]*"> => n.parse().unwrap();

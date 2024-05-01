@@ -2,10 +2,7 @@ use std::io::Write;
 
 use anyhow::Result;
 use clap::Parser;
-use pi_lib::{
-    env::EvalCtx,
-    parse::{handle_statement, CmdParser},
-};
+use pi_lib::parse::{handle_statement, CmdParser};
 
 fn propmt() -> Result<String> {
     print!(">>> ");
@@ -36,7 +33,7 @@ fn main() -> Result<()> {
         println!("Type 'exit' to quit.\n");
 
         let parser = CmdParser::new();
-        let mut ctx = EvalCtx::new();
+        let mut ctx = Default::default();
         loop {
             let input = propmt()?;
 
