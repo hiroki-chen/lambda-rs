@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 lalrpop = "0.20.2"
 lalrpop-util = "0.20.2"
+log = "0.4.21"
 
 [lib]
 doctest = false

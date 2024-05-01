@@ -24,14 +24,14 @@ pub fn handle_statement(stmt: Statement, ctx: &mut TypeCtx) -> EvalResult<Value>
     match stmt {
         Statement::Eval(e) | Statement::Check(e) => {
             let term = ast_transform(&e, vec![])?;
-            println!("debug: parsed term {term:?} with context {ctx:?}");
+            log::debug!("debug: parsed term {term:?} with context {ctx:?}");
 
             type_check(0, term.clone(), ctx.clone())?;
             eval(term, ctx.clone().into())
         }
         Statement::Declare(ident, ty) => {
             let term = ast_transform(&ty, vec![])?;
-            println!("debug: parsed term {term:?} with context {ctx:?}");
+            log::debug!("debug: parsed term {term:?} with context {ctx:?}");
 
             type_check(0, term.clone(), ctx.clone())?;
 
@@ -46,7 +46,7 @@ pub fn handle_statement(stmt: Statement, ctx: &mut TypeCtx) -> EvalResult<Value>
         }
         Statement::Let(ident, def) => {
             let term = ast_transform(&def, vec![])?;
-            println!("debug: parsed term {term:?} with context {ctx:?}");
+            log::debug!("debug: parsed term {term:?} with context {ctx:?}");
 
             let ty = type_check(0, term.clone(), ctx.clone())?;
             let v = eval(term.clone(), ctx.clone().into())?;

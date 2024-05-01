@@ -2,6 +2,7 @@ use std::io::Write;
 
 use anyhow::Result;
 use clap::Parser;
+use log::LevelFilter;
 use pi_lib::parse::{handle_statement, CmdParser};
 
 fn propmt() -> Result<String> {
@@ -23,14 +24,19 @@ pub struct Args {
 
     #[clap(long, default_value = "false", help = "Enter interactive mode.")]
     interactive: bool,
+
+    #[clap(short, long, default_value = "info", help = "Set the log level.")]
+    log_level: LevelFilter,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    env_logger::builder().filter_level(args.log_level).init();
+
     if args.interactive {
-        println!("Welcome to the Pi interpreter!");
-        println!("Type 'exit' to quit.\n");
+        log::debug!("Welcome to the Pi interpreter!");
+        log::debug!("Type 'exit' to quit.\n");
 
         let parser = CmdParser::new();
         let mut ctx = Default::default();
@@ -49,14 +55,14 @@ fn main() -> Result<()> {
             let cmd = match parser.parse(input.as_str()) {
                 Ok(cmd) => cmd,
                 Err(e) => {
-                    eprintln!("{}", e);
+                    log::error!("{}", e);
                     continue;
                 }
             };
 
             match handle_statement(cmd, &mut ctx) {
                 Ok(res) => println!("{:?}", res),
-                Err(e) => eprintln!("{}", e),
+                Err(e) => log::error!("{}", e),
             }
         }
     } else {

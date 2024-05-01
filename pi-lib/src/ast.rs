@@ -83,7 +83,7 @@ fn num_to_succ(num: usize) -> Term {
 
 /// This function transforms the AST into a checkable term.
 pub(crate) fn ast_transform(ast: &AstNode, symbols: Vec<String>) -> EvalResult<Term> {
-    println!("debug: parsing {ast:?} with symbols {symbols:?}");
+    log::debug!("debug: parsing {ast:?} with symbols {symbols:?}");
 
     match ast {
         AstNode::Universe => Ok(Term::Universe),
