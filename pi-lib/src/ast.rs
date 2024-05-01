@@ -48,6 +48,10 @@ pub enum AstNode {
         arg: Box<AstNode>,
         ret: Box<AstNode>,
     },
+    Forall {
+        args: Vec<Box<AstNode>>,
+        ret: Box<AstNode>,
+    },
 }
 
 fn ast_transform_checkable(ast: &AstNode, symbols: Vec<String>) -> EvalResult<CheckableTerm> {
@@ -56,12 +60,10 @@ fn ast_transform_checkable(ast: &AstNode, symbols: Vec<String>) -> EvalResult<Ch
             let mut symbols = symbols.clone();
             // Add the argument to the symbols list.
             symbols.push(arg.clone());
-            let body = ast_transform(body, symbols)?;
+            let body = ast_transform_checkable(&body, symbols.clone())?;
 
             Ok(CheckableTerm::Lambda {
-                term: Box::new(CheckableTerm::InfereableTerm {
-                    term: Box::new(body),
-                }),
+                term: Box::new(body),
             })
         }
         _ => Ok(CheckableTerm::InfereableTerm {
@@ -93,14 +95,7 @@ pub(crate) fn ast_transform(ast: &AstNode, symbols: Vec<String>) -> EvalResult<T
             })
         }
         AstNode::AnnotatedTerm { term, ty } => {
-            let t = match ast_transform(term, symbols.clone()) {
-                Ok(t) => CheckableTerm::InfereableTerm { term: Box::new(t) },
-                Err(_) => match ast_transform_checkable(term, symbols.clone()) {
-                    Ok(t) => t,
-                    Err(e) => return Err(e),
-                },
-            };
-
+            let t = ast_transform_checkable(term, symbols.clone())?;
             let ty = ast_transform_checkable(ty, symbols)?;
 
             Ok(Term::AnnotatedTerm {
@@ -112,12 +107,12 @@ pub(crate) fn ast_transform(ast: &AstNode, symbols: Vec<String>) -> EvalResult<T
         //
         // Why don't we just return the error? This is because parsing is unaware
         // of the context, so we must defer the error to the type checking phase.
-        AstNode::Var(name) => match symbols.iter().position(|x| x == name) {
+        AstNode::Var(name) => match symbols.iter().rev().position(|x| x == name) {
             Some(index) => Ok(Term::Bounded(index)),
             None => Ok(Term::Var(VariableName::Global(name.clone()))),
         },
         AstNode::Lambda { .. } => Err(EvalError::ParseError(
-            "Cannot parse single lambda abstraction.".to_string(),
+            "Cannot parse lambda without type annotation.".to_string(),
         )),
         AstNode::App { clos, arg } => {
             let clos = ast_transform(clos, symbols.clone())?;
@@ -145,6 +140,60 @@ pub(crate) fn ast_transform(ast: &AstNode, symbols: Vec<String>) -> EvalResult<T
                 term: Box::new(Term::Nat),
             }),
         }),
+        AstNode::Forall { args, ret } => build_forall_binding_list(args, ret, symbols.clone()),
         _ => todo!("{ast:?}"),
+    }
+}
+
+/// This builds the forall binding list by constructing a nested dependent function type.
+///
+/// # Examples
+///
+/// ```
+/// ∀ x : ℕ . ∀ y : ℕ . ℕ
+/// ```
+///
+/// will be transformed into:
+///
+/// ```
+/// ℕ -> (ℕ -> ℕ)
+/// ```
+pub(crate) fn build_forall_binding_list(
+    bindings: &[Box<AstNode>],
+    ret: &AstNode,
+    mut symbols: Vec<String>,
+) -> EvalResult<Term> {
+    if bindings.is_empty() {
+        return Err(EvalError::ParseError(
+            "Cannot parse empty forall binding list.".to_string(),
+        ));
+    }
+
+    if let AstNode::AnnotatedTerm { term, ty } = bindings.first().unwrap().as_ref() {
+        if let AstNode::Var(x) = term.as_ref() {
+            let arg = CheckableTerm::InfereableTerm {
+                term: Box::new(ast_transform(ty, symbols.clone())?),
+            };
+            symbols.push(x.clone());
+
+            let ret = match bindings.len() == 1 {
+                true => ast_transform(ret, symbols.clone())?,
+                false => build_forall_binding_list(&bindings[1..], ret, symbols.clone())?,
+            };
+            Ok(Term::DependentFunctionSpace {
+                arg: Box::new(arg),
+                ret: Box::new(CheckableTerm::InfereableTerm {
+                    term: Box::new(ret),
+                }),
+            })
+        } else {
+            return Err(EvalError::ParseError(
+                "Cannot parse forall binding list.".to_string(),
+            ));
+        }
+    } else {
+        return Err(EvalError::ParseError(
+            "Cannot parse forall binding list.".to_string(),
+        ));
     }
 }

@@ -25,26 +25,45 @@ You are provided with an interactive shell with the following three commands:
 
 Some examples:
 
-```shell
-$ cargo run -r --bin pi-interpreter -- --interactive
-Welcome to the Pi interpreter!
-Type 'exit' to quit.
+- **New term declaration:**
+  ```shell
+  $ cargo run -r --bin pi-interpreter -- --interactive
+  Welcome to the Pi interpreter!
+  Type 'exit' to quit.
 
->>> def a :: Nat -> Nat;
-∀ ℕ . ℕ
->>> def b :: Nat -> U;
-∀ ℕ . 𝒰
->>> show
-EvalCtx((b, ∀ ℕ . 𝒰) :: (a, ∀ ℕ . ℕ) :: [], [])
->>> eval (\x -> x :: a);
-Type mismatch: Type mismatch: expected 𝒰, found ∀ ℕ . ℕ
->>> eval ((\x -> x :: Nat -> Nat) 1);
-1
->>> eval ((\x -> Succ x :: Nat -> Nat) 1);
-2
->>> eval ((\x -> x :: Nat -> Nat) (\x -> x :: Nat -> Nat)); # No you cannot!
-Type mismatch: Type mismatch: expected ℕ, found ∀ ℕ . ℕ
-```
+  >>> def a :: ℕ -> ℕ;
+  ∀ ℕ . ℕ
+  >>> eval a;
+  a
+  ```
+- **Alias and definitions:**
+  ```shell
+  $ cargo run -r --bin pi-interpreter -- --interactive
+  Welcome to the Pi interpreter!
+  Type 'exit' to quit.
+
+  >>> let a := ℕ -> ℕ;
+  ∀ ℕ . ℕ
+  >>> let id := \ x -> x :: a;
+  λ . _0
+  >>> eval (id id);
+  Type mismatch: Type mismatch: expected ℕ, found ∀ ℕ . ℕ
+  >>> eval (id 1);
+  S(0)
+  ```
+
+- Polymorphism:
+  ```shell
+  $ cargo run -r --bin pi-interpreter -- --interactive
+  Welcome to the Pi interpreter!
+  Type 'exit' to quit.
+
+  >>> let id := \ a -> \ x -> x :: forall (a : U). a -> a;
+  λ . λ . _0
+  >>> eval (id Nat 0);
+  0
+  ```
+
 
 ## Known Issues
 

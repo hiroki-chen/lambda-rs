@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     clos::Closure,
-    env::{EvalCtx, TypeCtx},
+    env::{Ctx, EvalCtx, TypeCtx},
     err::{EvalError, EvalResult},
     term::{CheckableTerm, Neutral, Term, Type, Value, VariableName},
 };
@@ -67,6 +67,7 @@ pub(crate) fn lift(de_brujin_index: usize, val: Value) -> CheckableTerm {
 }
 
 fn subst(de_brujin_index: usize, t_what: Term, t_for: Term) -> Term {
+    println!("debug: subst {de_brujin_index} {t_what:?} {t_for:?}");
     match t_for {
         Term::AnnotatedTerm { term, ty } => {
             // Subsitute all.
@@ -100,6 +101,7 @@ fn subst(de_brujin_index: usize, t_what: Term, t_for: Term) -> Term {
 }
 
 fn subst_checked(de_brujin_index: usize, t_what: Term, t_for: CheckableTerm) -> CheckableTerm {
+    println!("debug: subst_checked {de_brujin_index} {t_what:?} {t_for:?}");
     match t_for {
         CheckableTerm::InfereableTerm { term } => CheckableTerm::InfereableTerm {
             term: Box::new(subst(de_brujin_index, t_what, *term)),
@@ -178,17 +180,11 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
                 body: Box::new(Closure::new(Arc::new(body), ctx)),
             })
         }
-        Term::Var(x) => match x {
-            VariableName::Global(x) => match ctx
-                .0
-                .into_iter()
-                .find(|(n, _)| n == &VariableName::Global(x.clone()))
-            {
-                Some((_, val)) => Ok(val),
-                None => Ok(Value::VNeutral(Neutral::NVar(VariableName::Global(x)))),
-            },
-            _ => unreachable!("This should never happen"),
+        Term::Var(x) => match ctx.0.into_iter().find(|(n, _)| n == &x) {
+            Some((_, val)) => Ok(val),
+            None => Ok(Value::VNeutral(Neutral::NVar(x))),
         },
+
         // Try to look up the context and get the result.
         Term::Bounded(idx) => match ctx.1.into_iter().nth(idx) {
             Some(val) => Ok(val),
@@ -223,25 +219,29 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
 
     match term {
         Term::AnnotatedTerm { term, ty } => {
+            println!("annot: calling sanity_check with {ty:?} and universe");
             // Ensure that the type is a universe.
             sanity_check(de_brujin_index, *ty.clone(), ctx.clone(), Value::VUniverse)?;
             // Evaluate that type.
-            let ty = eval_checked(*ty, ctx.clone().into())?;
-            println!("debug: type is {ty:?}");
-            println!("debug: term is {term:?}");
+            let ty = eval_checked(*ty, EvalCtx(ctx.0.clone(), Ctx::Nil))?;
             // Then do the type checking.
+            println!("annot: calling sanity_check with {term:?} and {ty:?}");
             sanity_check(de_brujin_index, *term, ctx, ty.clone()).map(|_| ty)
         }
         Term::Universe => Ok(Value::VUniverse),
         Term::DependentFunctionSpace { arg, ret } => {
-            println!("debug: checking {arg:?} -> {ret:?}");
-
+            println!("type_check: dt = {arg:?} -> {ret:?}");
+            println!("DependentFunctionSpace: 1calling sanity_check with {arg:?} Value::VUniverse");
+            // This is a sanity check to ensure that the argument is really a type.
             sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), Value::VUniverse)?;
-            let arg_ty = eval_checked(*arg, ctx.clone().into())?;
-            let substituted =
-                subst_checked(0, Term::Var(VariableName::Local(de_brujin_index)), *ret);
+            // We reduce the argument to a value.
+            let arg_ty = eval_checked(*arg, EvalCtx(ctx.0.clone(), Ctx::Nil))?;
+
             // We push the variable into the context.
             ctx.1 = ctx.1.push((VariableName::Local(de_brujin_index), arg_ty));
+            let substituted =
+                subst_checked(0, Term::Var(VariableName::Local(de_brujin_index)), *ret);
+            println!("DependentFunctionSpace: 2calling sanity_check with {substituted:?} Value::VUniverse:?");
             sanity_check(de_brujin_index + 1, substituted, ctx, Value::VUniverse)?;
             // Size ↑ ?
             Ok(Value::VUniverse)
@@ -260,6 +260,7 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
 
             if let Value::VPi { val, body } = ty {
                 // Let us check if the argument is of the right type.
+                println!("debug: app checking argument {arg:?} against {val:?}");
                 sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), *val)?;
 
                 let arg = eval_checked(*arg, ctx.clone().into())?;
@@ -287,6 +288,26 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
     }
 }
 
+fn lookup(term: Value, ctx: &Ctx<(VariableName, Type)>, mut attempt: usize) -> EvalResult<Value> {
+    let mut res = term;
+
+    while attempt > 0 {
+        match &res {
+            Value::VNeutral(Neutral::NVar(name)) => {
+                if let Some((_, ty)) = ctx.clone().into_iter().find(|(n, _)| n == name) {
+                    res = ty;
+                    attempt -= 1;
+                } else {
+                    return Ok(res);
+                }
+            }
+            _ => return Ok(res),
+        }
+    }
+
+    Ok(res)
+}
+
 /// Nothing is returned since the type is already know. We only check if such type formations are valid.
 pub fn sanity_check(
     de_brujin_index: usize,
@@ -294,14 +315,20 @@ pub fn sanity_check(
     mut ctx: TypeCtx,
     ty: Type,
 ) -> EvalResult<()> {
+    println!("debug: sanity checking {term:?} against {ty:?} with context {ctx:?}");
+
     match term {
         CheckableTerm::Zero => Ok(()),
         CheckableTerm::InfereableTerm { term } => {
-            let val = type_check(de_brujin_index, *term, ctx)?;
+            let val = lookup(
+                type_check(de_brujin_index, *term, ctx.clone())?,
+                &ctx.1,
+                128,
+            )?;
+            let ty = lookup(ty, &ctx.1, 128)?;
 
             let lhs = lift(0, val);
-            let rhs = lift(0, ty);
-
+            let rhs = lift(0, ty.clone());
             if lhs != rhs {
                 Err(EvalError::TypeMismatch(format!(
                     "Type mismatch: expected {:?}, found {:?}",
@@ -322,15 +349,12 @@ pub fn sanity_check(
 
                     // We push the variable into the context.
                     ctx.1 = ctx.1.push((VariableName::Local(de_brujin_index), *val));
-                    sanity_check(
-                        de_brujin_index + 1,
-                        substituted,
-                        ctx,
-                        body.call(Value::VNeutral(Neutral::NVar(VariableName::Local(
-                            de_brujin_index,
-                        ))))?,
-                    )?;
-                    Ok(())
+                    let ty = body.call(Value::VNeutral(Neutral::NVar(VariableName::Local(
+                        de_brujin_index,
+                    ))))?;
+
+                    println!("myself calling sanity_check with {substituted:?} {ty:?}");
+                    sanity_check(de_brujin_index + 1, substituted, ctx, ty)
                 }
                 _ => Err(EvalError::TypeMismatch(format!(
                     "Expected a dependent function, found {:?}",

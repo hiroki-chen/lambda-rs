@@ -236,9 +236,9 @@ impl fmt::Debug for Term {
 impl fmt::Debug for VariableName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            VariableName::Global(x) => write!(f, "{}", x),
-            VariableName::Local(n) => write!(f, "_{}", n),
-            VariableName::Quote(n) => write!(f, "_{}", n),
+            VariableName::Global(x) => write!(f, "Global {}", x),
+            VariableName::Local(n) => write!(f, "Local _{}", n),
+            VariableName::Quote(n) => write!(f, "Quote _{}", n),
         }
     }
 }

@@ -9,6 +9,7 @@ match {
     r"(def)",
     r"(eval)",
     r"(let)",
+    r"(forall)|(∀)",
     r"i8",
     r"i16",
     r"i32",
@@ -32,7 +33,7 @@ match {
 }
 
 #[inline]
-Comma<T>: Vec<T> = { // (1)
+ForallList<T>: Vec<T> = { // (1)
     <mut v:(<T> ",")*> <e:T?> => match e { // (2)
         None => v,
         Some(e) => {
@@ -49,6 +50,13 @@ pub Cmd: Statement = {
         Statement::Eval(*what),
     <l: Let> <id: Identifier> ":=" <e: Expr> ";" =>
         Statement::Let(id.to_string(), *e),
+}
+
+pub ForallBinding: Box<AstNode> = {
+    "(" <id: Identifier> ":" <ty: Expr> ")" => Box::new(AstNode::AnnotatedTerm {
+        term: Box::new(AstNode::Var(id.to_string())),
+        ty,
+    }),
 }
 
 pub Term: Box<AstNode> = {
@@ -83,11 +91,15 @@ pub Expr: Box<AstNode> = {
         ret: t2,
     }),
     #[precedence(level="5")] #[assoc(side="right")]
+    <forall: Forall> <bindings: ForallList<ForallBinding>> "." <e: Expr> => Box::new(AstNode::Forall {
+        args: bindings,
+        ret: e,
+    }),
+    #[precedence(level="6")] #[assoc(side="right")]
     <t: Expr> "::" <e: Expr> => Box::new(AstNode::AnnotatedTerm {
         term: t,
         ty: e,
-    }),
-
+    })
 }
 
 // def.
@@ -98,4 +110,5 @@ Eval: String = <s:r"(eval)"> => s.into();
 Let: String = <s:r"(let)"> => s.into();
 // Lambda
 Lambda: String = <s:r"(lambda)|(\\)|(λ)"> => s.into();
+Forall: String = <s:r"(forall)|(∀)"> => s.into();
 Num: usize = <n:r"[0-9]|[1-9]+[0-9]*"> => n.parse().unwrap();
