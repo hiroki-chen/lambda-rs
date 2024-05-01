@@ -6,8 +6,8 @@ grammar;
 use crate::ast::*;
 
 match {
-    r"(?i)(type)",
-    r"(?i)(eval)",
+    r"(def)",
+    r"(eval)",
     r"i8",
     r"i16",
     r"i32",
@@ -18,11 +18,11 @@ match {
     r"u64",
     r"f32",
     r"f64",
-    r"U",
+    r"(Type)|(U)",
     r"(bool)|(boolean)",
     r"(str)|([sS]tring)",
-    r"(lambda|\\|λ)",
-    r"Nat",
+    r"(lambda)|(\\)|(λ)",
+    r"(Nat)|(ℕ)",
     r"(S)|(Succ)",
 } else {
     r"[a-zA-Z_][a-zA-Z0-9_]*" => Identifier,
@@ -42,53 +42,55 @@ Comma<T>: Vec<T> = { // (1)
 };
 
 pub Cmd: Statement = {
-    <t: Type> <id: Identifier> "::" <e: Ast> ";" =>
+    <t: Def> <id: Identifier> "::" <e: Expr> ";" =>
         Statement::Declare(id.to_string(), *e),
-    <e: Eval> "(" <what: Ast> ")" ";" =>
+    <e: Eval> <what: Term> ";" =>
         Statement::Eval(*what),
 }
 
-pub Ast: Box<AstNode> = {
-    #[precedence(level="0")]
-    r"(S)|(Succ)" <e: Ast> => Box::new(AstNode::Succ(e)),
-    #[precedence(level="0")]
-    r"U" => Box::new(AstNode::Universe),
-    #[precedence(level="0")]
-    r"O" => Box::new(AstNode::Num(0)),
-    #[precedence(level="0")]
-    <s: r"[0-9]+"> => Box::new(AstNode::Num(s.parse().unwrap())),
-    #[precedence(level="0")]
-    r"Nat" => Box::new(AstNode::Nat),
-
-    #[precedence(level="0")]
+pub Term: Box<AstNode> = {
+    "(" <e: Expr> ")" => e,
+    r"(O)|(Zero)" => Box::new(AstNode::Num(0)),
+    <n: Num> => Box::new(AstNode::Num(n)),
     <id: Identifier> => Box::new(AstNode::Var(id.to_string())),
-    #[precedence(level="1")] #[assoc(side="right")]
-    <t1: Ast> "->" <t2: Ast> => Box::new(AstNode::DependentFunctionSpace {
-        arg: t1,
-        ret: t2,
+    r"(Nat)|(ℕ)" => Box::new(AstNode::Nat),
+    r"(Type)|(U)" => Box::new(AstNode::Universe),
+}
+
+pub Expr: Box<AstNode> = {
+    #[precedence(level="0")]
+    <t: Term> => t,
+    #[precedence(level="1")]
+    r"(S)|(Succ)" <e: Expr> => Box::new(AstNode::Succ(e)),
+    #[precedence(level="2")] #[assoc(side="left")]
+    <e1: Expr> <e2: Expr> => Box::new(AstNode::App {
+        clos: e1,
+        arg: e2,
     }),
-    #[precedence(level="2")]
-    <lambda: Lambda> <id: Identifier> "->" <e: Ast> =>
+
+    #[precedence(level="3")]
+    <lambda: Lambda> <id: Identifier> "->" <e: Expr> =>
         Box::new(AstNode::Lambda {
             arg: id.to_string(),
             body: e,
         }),
-
-    #[precedence(level="3")] #[assoc(side="left")]
-    <t: Ast> "::" <e: Ast> => Box::new(AstNode::AnnotatedTerm {
+    #[precedence(level="4")] #[assoc(side="right")]
+    <t1: Expr> "->" <t2: Expr> => Box::new(AstNode::DependentFunctionSpace {
+        arg: t1,
+        ret: t2,
+    }),
+    #[precedence(level="5")] #[assoc(side="right")]
+    <t: Expr> "::" <e: Expr> => Box::new(AstNode::AnnotatedTerm {
         term: t,
         ty: e,
     }),
-    #[precedence(level="4")] #[assoc(side="left")]
-    "(" <e1: Ast> ")" <e2: Ast> => Box::new(AstNode::App {
-        clos: e1,
-        arg: e2,
-    }),
+
 }
 
-// type.
-Type: String = <s:r"(?i)(type)"> => s.into();
+// def.
+Def: String = <s:r"(def)"> => s.into();
 // eval
-Eval: String = <s:r"(?i)(eval)"> => s.into();
+Eval: String = <s:r"(eval)"> => s.into();
 // Lambda
-Lambda: String = <s:r"(lambda|\\|λ)"> => s.into();
+Lambda: String = <s:r"(lambda)|(\\)|(λ)"> => s.into();
+Num: usize = <n:r"[0-9]|[1-9]+[0-9]*"> => n.parse().unwrap();

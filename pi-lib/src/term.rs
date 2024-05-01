@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use crate::{clos::Closure, env::EvalCtx};
+use crate::{clos::Closure, env::EvalCtx, eval::lift};
 
 pub type Type = Value;
 
@@ -103,7 +103,7 @@ pub enum Value {
 /// A neutral term is just a variable applied to a possibly empty sequence of values or
 /// is just a lambda abstraction. Neutral terms are good if we want to evalaute types on
 /// the fly.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Neutral {
     NVar(VariableName),
     NApp(Box<Neutral>, Box<Value>),
@@ -254,6 +254,15 @@ impl fmt::Debug for CheckableTerm {
     }
 }
 
+impl fmt::Debug for Neutral {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Neutral::NVar(x) => write!(f, "{:?}", x),
+            Neutral::NApp(n, v) => write!(f, "App ({:?}) {:?}", n, v),
+        }
+    }
+}
+
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn succ_to_num(val: &Value) -> usize {
@@ -271,7 +280,10 @@ impl fmt::Debug for Value {
             Value::VSucc { .. } => write!(f, "{}", succ_to_num(self)),
             Value::VNeutral(n) => write!(f, "{:?}", n),
             Value::VAbs(clos) => write!(f, "{:?}", clos),
-            Value::VPi { val, body } => write!(f, "∀ {:?} . {:?}", val, body),
+            Value::VPi { .. } => {
+                let lifted = lift(0, self.clone());
+                write!(f, "{:?}", lifted)
+            }
         }
     }
 }

@@ -33,10 +33,11 @@ pub fn handle_statement(stmt: Statement, ctx: &mut EvalCtx) -> EvalResult<Value>
             let term = ast_transform(&ty, vec![])?;
             println!("debug: parsed term {term:?} with context {ctx:?}");
 
-            let v = type_check(0, term, ctx.clone())?;
-            ctx.0 = ctx.0.push((VariableName::Global(ident), v));
+            type_check(0, term.clone(), ctx.clone())?;
+            let v = eval(term, ctx.clone())?;
+            ctx.0 = ctx.0.push((VariableName::Global(ident), v.clone()));
 
-            Ok(Value::VUniverse)
+            Ok(v)
         }
     }
 }

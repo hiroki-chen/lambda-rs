@@ -89,6 +89,7 @@ fn subst(de_brujin_index: usize, t_what: Term, t_for: Term) -> Term {
             let ret = Box::new(subst_checked(de_brujin_index + 1, t_what, *ret));
             Term::DependentFunctionSpace { arg, ret }
         }
+        Term::Zero => Term::Zero,
         Term::Nat => Term::Nat,
         Term::Succ { pred } => {
             let pred = Box::new(subst(de_brujin_index, t_what, *pred));

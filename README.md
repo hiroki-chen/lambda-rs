@@ -17,14 +17,37 @@ $$ e, \rho ::= \lambda x.e \mid e : \rho \mid \forall x:\rho.\rho' \mid e_1e_2 \
 
 ## Usage
 
+You are provided with an interactive shell with the following three commands:
+
+- `def id :: t`: declare a new term with type `t`. 
+- `eval e`: evaluate `e`.
+- `show`: print the current context.
+
+Some examples:
+
 ```shell
 $ cargo run -r --bin pi-interpreter -- --interactive
 Welcome to the Pi interpreter!
 Type 'exit' to quit.
->>> eval ((\x -> x :: Nat -> Nat) 0);
-O
->>> type a :: U;
-𝒰
->>> eval (\x -> x :: a -> Nat);
-Type mismatch: Type mismatch: expected ℕ, found a
+
+>>> def a :: Nat -> Nat;
+∀ ℕ . ℕ
+>>> def b :: Nat -> U;
+∀ ℕ . 𝒰
+>>> show
+EvalCtx((b, ∀ ℕ . 𝒰) :: (a, ∀ ℕ . ℕ) :: [], [])
+>>> eval (\x -> x :: a);
+Type mismatch: Type mismatch: expected 𝒰, found ∀ ℕ . ℕ
+>>> eval ((\x -> x :: Nat -> Nat) 1);
+1
+>>> eval ((\x -> Succ x :: Nat -> Nat) 1);
+2
+>>> eval ((\x -> x :: Nat -> Nat) (\x -> x :: Nat -> Nat)); # No you cannot!
+Type mismatch: Type mismatch: expected ℕ, found ∀ ℕ . ℕ
 ```
+
+## Known Issues
+
+- Large numbers will cause *stack overflow* because we represent natural numbers as successors.
+- There is no pretty printer so sometimes the output may not be readable.
+- The parser is still buggy so some valid expressions will be rejected. Hopefully we can fix it.
