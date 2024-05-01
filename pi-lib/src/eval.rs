@@ -226,7 +226,9 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
             // Ensure that the type is a universe.
             sanity_check(de_brujin_index, *ty.clone(), ctx.clone(), Value::VUniverse)?;
             // Evaluate that type.
-            let ty = eval_checked(*ty, Default::default())?;
+            let ty = eval_checked(*ty, ctx.clone().into())?;
+            println!("debug: type is {ty:?}");
+            println!("debug: term is {term:?}");
             // Then do the type checking.
             sanity_check(de_brujin_index, *term, ctx, ty.clone()).map(|_| ty)
         }
@@ -235,7 +237,7 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
             println!("debug: checking {arg:?} -> {ret:?}");
 
             sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), Value::VUniverse)?;
-            let arg_ty = eval_checked(*arg, Default::default())?;
+            let arg_ty = eval_checked(*arg, ctx.clone().into())?;
             let substituted =
                 subst_checked(0, Term::Var(VariableName::Local(de_brujin_index)), *ret);
             // We push the variable into the context.
@@ -258,9 +260,9 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
 
             if let Value::VPi { val, body } = ty {
                 // Let us check if the argument is of the right type.
-                sanity_check(de_brujin_index, *arg.clone(), ctx, *val)?;
+                sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), *val)?;
 
-                let arg = eval_checked(*arg, Default::default())?;
+                let arg = eval_checked(*arg, ctx.clone().into())?;
                 body.call(arg)
             } else {
                 Err(EvalError::TypeMismatch(format!(
