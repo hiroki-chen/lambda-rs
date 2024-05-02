@@ -83,8 +83,6 @@ fn num_to_succ(num: usize) -> Term {
 
 /// This function transforms the AST into a checkable term.
 pub(crate) fn ast_transform(ast: &AstNode, symbols: Vec<String>) -> EvalResult<Term> {
-    log::debug!("debug: parsing {ast:?} with symbols {symbols:?}");
-
     match ast {
         AstNode::Universe => Ok(Term::Universe),
         AstNode::Nat => Ok(Term::Nat),
@@ -125,7 +123,10 @@ pub(crate) fn ast_transform(ast: &AstNode, symbols: Vec<String>) -> EvalResult<T
         }
         AstNode::DependentFunctionSpace { arg, ret } => {
             let arg = ast_transform_checkable(arg, symbols.clone())?;
-            let ret = ast_transform_checkable(ret, symbols)?;
+            // Insert "whitespace" to make quote work.
+            let mut new_symbol = symbols.clone();
+            new_symbol.push("".to_string());
+            let ret = ast_transform_checkable(ret, new_symbol)?;
 
             Ok(Term::DependentFunctionSpace {
                 arg: Box::new(arg),

@@ -67,7 +67,6 @@ pub(crate) fn lift(de_brujin_index: usize, val: Value) -> CheckableTerm {
 }
 
 fn subst(de_brujin_index: usize, t_what: Term, t_for: Term) -> Term {
-    log::debug!("debug: subst {de_brujin_index} {t_what:?} {t_for:?}");
     match t_for {
         Term::AnnotatedTerm { term, ty } => {
             // Subsitute all.
@@ -101,7 +100,6 @@ fn subst(de_brujin_index: usize, t_what: Term, t_for: Term) -> Term {
 }
 
 fn subst_checked(de_brujin_index: usize, t_what: Term, t_for: CheckableTerm) -> CheckableTerm {
-    log::debug!("debug: subst_checked {de_brujin_index} {t_what:?} {t_for:?}");
     match t_for {
         CheckableTerm::InfereableTerm { term } => CheckableTerm::InfereableTerm {
             term: Box::new(subst(de_brujin_index, t_what, *term)),
@@ -215,23 +213,18 @@ pub fn eval(term: Term, ctx: EvalCtx) -> EvalResult<Value> {
 
 /// Do a type check.
 pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalResult<Type> {
-    log::debug!("debug: checking {term:?} with context {ctx:?}");
 
     match term {
         Term::AnnotatedTerm { term, ty } => {
-            log::debug!("annot: calling sanity_check with {ty:?} and universe");
             // Ensure that the type is a universe.
             sanity_check(de_brujin_index, *ty.clone(), ctx.clone(), Value::VUniverse)?;
             // Evaluate that type.
             let ty = eval_checked(*ty, EvalCtx(ctx.0.clone(), Ctx::Nil))?;
             // Then do the type checking.
-            log::debug!("annot: calling sanity_check with {term:?} and {ty:?}");
             sanity_check(de_brujin_index, *term, ctx, ty.clone()).map(|_| ty)
         }
         Term::Universe => Ok(Value::VUniverse),
         Term::DependentFunctionSpace { arg, ret } => {
-            log::debug!("type_check: dt = {arg:?} -> {ret:?}");
-            log::debug!("DependentFunctionSpace: 1calling sanity_check with {arg:?} Value::VUniverse");
             // This is a sanity check to ensure that the argument is really a type.
             sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), Value::VUniverse)?;
             // We reduce the argument to a value.
@@ -241,33 +234,33 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
             ctx.1 = ctx.1.push((VariableName::Local(de_brujin_index), arg_ty));
             let substituted =
                 subst_checked(0, Term::Var(VariableName::Local(de_brujin_index)), *ret);
-            log::debug!("DependentFunctionSpace: 2calling sanity_check with {substituted:?} Value::VUniverse:?");
             sanity_check(de_brujin_index + 1, substituted, ctx, Value::VUniverse)?;
             // Size ↑ ?
             Ok(Value::VUniverse)
         }
         Term::Var(name) => match ctx.1.into_iter().find(|(n, _)| n == &name) {
-            Some((_, val)) => Ok(val),
+            Some((_, val)) => {
+                Ok(val)
+            }
             None => Err(EvalError::UnboundVariable(format!(
                 "Variable {:?} is not found in the context",
                 name
             ))),
         },
         Term::App { clos, arg } => {
-            log::debug!("debug: checking application {clos:?} {arg:?}");
 
             let ty = type_check(de_brujin_index, *clos.clone(), ctx.clone())?;
 
+
             if let Value::VPi { val, body } = ty {
                 // Let us check if the argument is of the right type.
-                log::debug!("debug: app checking argument {arg:?} against {val:?}");
                 sanity_check(de_brujin_index, *arg.clone(), ctx.clone(), *val)?;
 
                 let arg = eval_checked(*arg, ctx.clone().into())?;
                 body.call(arg)
             } else {
                 Err(EvalError::TypeMismatch(format!(
-                    "Expected a dependent function, found {:?}",
+                    "App argument error: Expected a dependent function, found {:?}",
                     ty
                 )))
             }
@@ -288,6 +281,10 @@ pub fn type_check(de_brujin_index: usize, term: Term, mut ctx: TypeCtx) -> EvalR
     }
 }
 
+/// Sometimes types are chained, meaning that there exists a type that is defined in terms of another type, and
+/// it typically occurs when we are defining a dependent type like `∀ a : A, b : a . whatever`.
+///
+/// This function looks up the term in the context in a chained manner.
 fn lookup(term: Value, ctx: &Ctx<(VariableName, Type)>, mut attempt: usize) -> EvalResult<Value> {
     let mut res = term;
 
@@ -315,7 +312,6 @@ pub fn sanity_check(
     mut ctx: TypeCtx,
     ty: Type,
 ) -> EvalResult<()> {
-    log::debug!("debug: sanity checking {term:?} against {ty:?} with context {ctx:?}");
 
     match term {
         CheckableTerm::Zero => Ok(()),
@@ -353,7 +349,6 @@ pub fn sanity_check(
                         de_brujin_index,
                     ))))?;
 
-                    log::debug!("myself calling sanity_check with {substituted:?} {ty:?}");
                     sanity_check(de_brujin_index + 1, substituted, ctx, ty)
                 }
                 _ => Err(EvalError::TypeMismatch(format!(

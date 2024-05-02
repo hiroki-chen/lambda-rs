@@ -32,11 +32,16 @@ pub struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    env_logger::builder().filter_level(args.log_level).init();
+    env_logger::builder()
+        .format_timestamp(None)
+        .format_module_path(false)
+        .format_target(false)
+        .filter_level(args.log_level)
+        .init();
 
     if args.interactive {
-        log::debug!("Welcome to the Pi interpreter!");
-        log::debug!("Type 'exit' to quit.\n");
+        println!("Welcome to the Pi interpreter!");
+        println!("Type 'exit' to quit.\n");
 
         let parser = CmdParser::new();
         let mut ctx = Default::default();

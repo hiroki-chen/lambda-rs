@@ -64,6 +64,20 @@ Some examples:
   0
   ```
 
+- Eliminators (WIP):
+  ```shell
+  Welcome to the Pi interpreter!
+  Type 'exit' to quit.
+
+  >>> def NatElim ::
+          forall (m : Nat -> U) .
+              m 0 -> 
+              (forall (l : Nat) . m l -> m (S l)) -> 
+              (forall (k : Nat) . m k);
+  ∀ ∀ ℕ . 𝒰 . ∀ App (_0)(O) . ∀ ∀ ℕ . ∀ App (_2)(_0) . App (_3)(S(_1)) . ∀ ℕ . App (_3)(_0)
+  ```
+
+  You now defined the eliminator for natural numbers! Congratulations!
 
 ## Known Issues
 
